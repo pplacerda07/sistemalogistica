@@ -1,0 +1,22 @@
+# Secrets — NUNCA commitar
+secret.env
+*.env
+!*.env.example
+.env*
+!.env*.example
+
+# Dependencies & builds (Next.js está em site/)
+node_modules/
+.next/
+out/
+build/
+.vercel/
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
