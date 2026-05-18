@@ -2,7 +2,16 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { MapPin, Clock, Navigation, Phone, ArrowLeft } from 'lucide-react'
+import {
+  MapPin,
+  Clock,
+  Navigation,
+  Phone,
+  ArrowLeft,
+  User,
+  Calendar,
+  CheckCircle2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import RotaDetailMap from './rota-map'
@@ -17,7 +26,7 @@ export default async function RotaDetailPage({
 
   const { data: rota } = await supabase
     .from('rotas')
-    .select('*')
+    .select('*, vendedor:profiles!rotas_vendedor_id_fkey(id, nome)')
     .eq('id', id)
     .single()
 
@@ -28,6 +37,10 @@ export default async function RotaDetailPage({
     .select('*, clientes(*)')
     .eq('rota_id', id)
     .order('ordem', { ascending: true })
+
+  const totalParadas = paradas?.length ?? 0
+  const concluidas = paradas?.filter((p) => p.status === 'concluida').length ?? 0
+  const progresso = totalParadas > 0 ? Math.round((concluidas / totalParadas) * 100) : 0
 
   const statusColors: Record<string, string> = {
     planejada: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
@@ -91,6 +104,43 @@ export default async function RotaDetailPage({
         </div>
       </div>
 
+      {/* Meta info */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <Card className="bg-white/5 border-white/10">
+          <CardContent className="p-4 flex items-center gap-3">
+            <User className="w-5 h-5 text-purple-400" />
+            <div>
+              <p className="text-xs text-gray-400">Vendedor</p>
+              <p className="text-white font-semibold">
+                {rota.vendedor?.nome ?? '—'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-white/5 border-white/10">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Calendar className="w-5 h-5 text-blue-400" />
+            <div>
+              <p className="text-xs text-gray-400">Data</p>
+              <p className="text-white font-semibold">
+                {new Date(rota.data).toLocaleDateString('pt-BR')}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-white/5 border-white/10">
+          <CardContent className="p-4 flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-400">Progresso</p>
+              <p className="text-white font-semibold">
+                {concluidas} / {totalParadas} ({progresso}%)
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <Card className="bg-white/5 border-white/10">
@@ -122,7 +172,7 @@ export default async function RotaDetailPage({
             <MapPin className="w-5 h-5 text-emerald-400" />
             <div>
               <p className="text-xs text-gray-400">Paradas</p>
-              <p className="text-white font-semibold">{paradas?.length ?? 0}</p>
+              <p className="text-white font-semibold">{totalParadas}</p>
             </div>
           </CardContent>
         </Card>
@@ -154,6 +204,12 @@ export default async function RotaDetailPage({
                 <p className="text-xs text-gray-500 truncate">
                   {parada.clientes?.endereco_texto}
                 </p>
+                {parada.visitada_em && (
+                  <p className="text-xs text-emerald-400/60 mt-0.5">
+                    Visitado em{' '}
+                    {new Date(parada.visitada_em).toLocaleTimeString('pt-BR')}
+                  </p>
+                )}
               </div>
               {parada.clientes?.telefone && (
                 <a

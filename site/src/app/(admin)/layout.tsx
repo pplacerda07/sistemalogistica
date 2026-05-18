@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   MapPin,
+  UserCog,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
@@ -19,6 +20,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Clientes', href: '/clientes', icon: Users },
   { name: 'Rotas', href: '/rotas', icon: Route },
+  { name: 'Usuários', href: '/usuarios', icon: UserCog },
 ]
 
 export default function AdminLayout({

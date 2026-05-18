@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
@@ -18,9 +17,9 @@ import {
   Clock,
   Navigation,
   Zap,
+  User,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { useMemo } from 'react'
 
 const RouteMap = dynamic(() => import('@/components/map/RouteMap'), {
   ssr: false,
@@ -50,9 +49,16 @@ interface ParsedCliente {
   ativo: boolean
 }
 
+interface VendedorOption {
+  id: string
+  nome: string
+}
+
 export default function NovaRotaPage() {
   const [clientes, setClientes] = useState<ParsedCliente[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [vendedores, setVendedores] = useState<VendedorOption[]>([])
+  const [vendedorId, setVendedorId] = useState<string>('')
   const [search, setSearch] = useState('')
   const [origem, setOrigem] = useState('')
   const [origemCoords, setOrigemCoords] = useState<{
@@ -72,19 +78,24 @@ export default function NovaRotaPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    async function loadClientes() {
-      const { data } = await supabase
-        .from('clientes')
-        .select('*')
-        .eq('ativo', true)
-        .not('location', 'is', null)
-        .order('nome')
+    async function loadData() {
+      const [{ data: clientesData }, { data: vendedoresData }] = await Promise.all([
+        supabase
+          .from('clientes')
+          .select('*')
+          .eq('ativo', true)
+          .not('location', 'is', null)
+          .order('nome'),
+        supabase
+          .from('profiles')
+          .select('id, nome')
+          .eq('role', 'vendedor')
+          .order('nome'),
+      ])
 
-      if (data) {
-        // Parse PostGIS geography points
-        const parsed: ParsedCliente[] = data.map((c: ClienteDB) => {
-          // location comes as a GeoJSON or EWKT - we need to extract coords
-          // Supabase returns geography as {type: "Point", coordinates: [lng, lat]}
+      if (clientesData) {
+        const rows = clientesData as unknown as ClienteDB[]
+        const parsed: ParsedCliente[] = rows.map((c) => {
           let lat = 0,
             lng = 0
           if (c.location && typeof c.location === 'object') {
@@ -106,10 +117,14 @@ export default function NovaRotaPage() {
         })
         setClientes(parsed)
       }
+
+      if (vendedoresData) {
+        setVendedores(vendedoresData as unknown as VendedorOption[])
+      }
       setLoading(false)
     }
-    loadClientes()
-  }, [])
+    loadData()
+  }, [supabase])
 
   const filtered = clientes.filter(
     (c) =>
@@ -197,19 +212,18 @@ export default function NovaRotaPage() {
 
   async function handleSave() {
     if (!optimizedResult || !origemCoords) return
+    if (!vendedorId) {
+      toast.error('Selecione o vendedor responsável')
+      return
+    }
 
     setSaving(true)
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) throw new Error('Não autenticado')
-
       // Create route
       const { data: rota, error: rotaError } = await supabase
         .from('rotas')
         .insert({
-          vendedor_id: user.id,
+          vendedor_id: vendedorId,
           data: new Date().toISOString().split('T')[0],
           origem_texto: origem,
           status: 'planejada',
@@ -274,6 +288,37 @@ export default function NovaRotaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Configuration */}
         <div className="space-y-4">
+          {/* Vendedor */}
+          <Card className="bg-white/5 border-white/10">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white text-base flex items-center gap-2">
+                <User className="w-4 h-4 text-purple-400" />
+                Vendedor responsável
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <select
+                value={vendedorId}
+                onChange={(e) => {
+                  setVendedorId(e.target.value)
+                  setOptimizedResult(null)
+                }}
+                required
+                className="w-full h-9 rounded-md bg-white/5 border border-white/10 text-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              >
+                <option value="">Selecione um vendedor...</option>
+                {vendedores.map((v) => (
+                  <option key={v.id} value={v.id}>{v.nome}</option>
+                ))}
+              </select>
+              {vendedores.length === 0 && !loading && (
+                <p className="text-xs text-amber-400 mt-2">
+                  Nenhum vendedor cadastrado. Cadastre em /usuarios.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Origin */}
           <Card className="bg-white/5 border-white/10">
             <CardHeader className="pb-3">
@@ -380,7 +425,7 @@ export default function NovaRotaPage() {
           <div className="flex gap-3">
             <Button
               onClick={handleOptimize}
-              disabled={optimizing || !origemCoords || selected.size < 1}
+              disabled={optimizing || !origemCoords || selected.size < 1 || !vendedorId}
               className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/25"
             >
               {optimizing ? (

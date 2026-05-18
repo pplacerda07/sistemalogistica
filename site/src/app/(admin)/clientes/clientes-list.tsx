@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Plus, Phone, MapPin, Search, AlertCircle } from 'lucide-react'
+import { Plus, Phone, MapPin, Search, AlertCircle, Pencil } from 'lucide-react'
 import ClienteForm from '@/components/forms/ClienteForm'
 
 interface ClienteRow {
@@ -26,25 +27,32 @@ interface ClienteRow {
   created_at: string
 }
 
+type StatusFilter = 'todos' | 'ativos' | 'inativos'
+
 export default function ClientesList({
   initialClientes,
 }: {
   initialClientes: ClienteRow[]
 }) {
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ativos')
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const filtered = initialClientes.filter(
-    (c) =>
-      c.nome.toLowerCase().includes(search.toLowerCase()) ||
-      c.endereco_texto.toLowerCase().includes(search.toLowerCase()) ||
+  const filtered = initialClientes.filter((c) => {
+    if (statusFilter === 'ativos' && !c.ativo) return false
+    if (statusFilter === 'inativos' && c.ativo) return false
+    const q = search.toLowerCase()
+    return (
+      c.nome.toLowerCase().includes(q) ||
+      c.endereco_texto.toLowerCase().includes(q) ||
       c.telefone?.includes(search)
-  )
+    )
+  })
 
   return (
     <>
-      {/* Search + Add */}
-      <div className="flex items-center gap-3">
+      {/* Search + filter + Add */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <Input
@@ -54,6 +62,15 @@ export default function ClientesList({
             className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
           />
         </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          className="h-9 rounded-md bg-white/5 border border-white/10 text-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        >
+          <option value="ativos">Apenas ativos</option>
+          <option value="inativos">Apenas inativos</option>
+          <option value="todos">Todos</option>
+        </select>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger
             render={
@@ -63,7 +80,7 @@ export default function ClientesList({
               </Button>
             }
           />
-          <DialogContent className="bg-[#0d0d24] border-white/10 text-white">
+          <DialogContent className="bg-[#0d0d24] border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Cadastrar Cliente</DialogTitle>
             </DialogHeader>
@@ -72,12 +89,14 @@ export default function ClientesList({
         </Dialog>
       </div>
 
-      {/* Client cards */}
+      {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map((cliente) => (
           <Card
             key={cliente.id}
-            className="bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/15 transition-all duration-200 group"
+            className={`bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/15 transition-all duration-200 ${
+              !cliente.ativo ? 'opacity-60' : ''
+            }`}
           >
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
@@ -128,6 +147,19 @@ export default function ClientesList({
                   {cliente.observacoes}
                 </p>
               )}
+
+              <div className="mt-3 pt-3 border-t border-white/5 flex justify-end">
+                <Link href={`/clientes/${cliente.id}`}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-gray-400 hover:text-white hover:bg-white/5 h-7 px-2"
+                  >
+                    <Pencil className="w-3.5 h-3.5 mr-1" />
+                    Editar
+                  </Button>
+                </Link>
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -137,9 +169,7 @@ export default function ClientesList({
         <div className="text-center py-12">
           <MapPin className="w-12 h-12 text-gray-600 mx-auto mb-3" />
           <p className="text-gray-400">
-            {search
-              ? 'Nenhum cliente encontrado'
-              : 'Nenhum cliente cadastrado ainda'}
+            {search ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado ainda'}
           </p>
         </div>
       )}
