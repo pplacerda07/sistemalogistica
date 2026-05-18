@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { useRouter, useParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   MapPin,
@@ -41,14 +40,9 @@ export default function RotaDetailMobilePage() {
   const [paradas, setParadas] = useState<ParadaData[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const router = useRouter()
   const supabase = createClient()
 
-  useEffect(() => {
-    loadParadas()
-  }, [rotaId])
-
-  async function loadParadas() {
+  const loadParadas = useCallback(async () => {
     const { data } = await supabase
       .from('paradas')
       .select('*, clientes(*)')
@@ -57,7 +51,12 @@ export default function RotaDetailMobilePage() {
 
     if (data) setParadas(data as unknown as ParadaData[])
     setLoading(false)
-  }
+  }, [supabase, rotaId])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadParadas()
+  }, [loadParadas])
 
   async function updateParadaStatus(
     paradaId: string,
