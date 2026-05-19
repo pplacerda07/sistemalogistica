@@ -37,15 +37,6 @@ const RouteMap = dynamic(() => import('@/components/map/RouteMap'), {
   ),
 })
 
-interface ClienteDB {
-  id: string
-  nome: string
-  telefone: string | null
-  endereco_texto: string
-  location: unknown
-  ativo: boolean
-}
-
 interface ParsedCliente {
   id: string
   nome: string
@@ -86,13 +77,8 @@ export default function NovaRotaPage() {
 
   useEffect(() => {
     async function loadData() {
-      const [{ data: clientesData }, { data: vendedoresData }] = await Promise.all([
-        supabase
-          .from('clientes')
-          .select('*')
-          .eq('ativo', true)
-          .not('location', 'is', null)
-          .order('nome'),
+      const [{ data: clientesData, error: clientesError }, { data: vendedoresData }] = await Promise.all([
+        supabase.rpc('get_clientes_ativos_com_coords'),
         supabase
           .from('profiles')
           .select('id, nome')
@@ -100,29 +86,16 @@ export default function NovaRotaPage() {
           .order('nome'),
       ])
 
+      if (clientesError) {
+        console.error('[loadData] clientes RPC error:', clientesError)
+        toast.error(
+          'Não foi possível carregar clientes. Verifique se a função SQL ' +
+            'get_clientes_ativos_com_coords foi criada no Supabase.'
+        )
+      }
+
       if (clientesData) {
-        const rows = clientesData as unknown as ClienteDB[]
-        const parsed: ParsedCliente[] = rows.map((c) => {
-          let lat = 0,
-            lng = 0
-          if (c.location && typeof c.location === 'object') {
-            const loc = c.location as { coordinates?: number[] }
-            if (loc.coordinates) {
-              lng = loc.coordinates[0]
-              lat = loc.coordinates[1]
-            }
-          }
-          return {
-            id: c.id,
-            nome: c.nome,
-            telefone: c.telefone,
-            endereco_texto: c.endereco_texto,
-            lat,
-            lng,
-            ativo: c.ativo,
-          }
-        })
-        setClientes(parsed)
+        setClientes(clientesData as unknown as ParsedCliente[])
       }
 
       if (vendedoresData) {
