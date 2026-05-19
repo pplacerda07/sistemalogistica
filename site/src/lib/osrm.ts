@@ -6,20 +6,49 @@ export interface OSRMRouteResult {
   geometry: string      // encoded polyline
 }
 
+async function osrmFetch(url: string, label: string) {
+  // 25s timeout so we stay under Vercel's 30s function limit.
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 25_000)
+
+  let res: Response
+  try {
+    res = await fetch(url, { signal: ctrl.signal })
+  } catch (err) {
+    clearTimeout(t)
+    const e = err as Error
+    if (e.name === 'AbortError') {
+      throw new Error(`OSRM ${label} timeout (>25s) — serviço público lento ou indisponível`)
+    }
+    throw new Error(`OSRM ${label} network error: ${e.message}`)
+  }
+  clearTimeout(t)
+
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`OSRM ${label} ${res.status}: ${text.slice(0, 200)}`)
+  }
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`OSRM ${label} returned non-JSON: ${text.slice(0, 200)}`)
+  }
+}
+
 /**
  * Fetch NxN duration matrix from OSRM /table endpoint
  */
 export async function fetchDurationMatrix(
   points: { lat: number; lng: number }[]
 ): Promise<number[][]> {
-  const coords = points.map(p => `${p.lng},${p.lat}`).join(';')
+  const coords = points.map((p) => `${p.lng},${p.lat}`).join(';')
   const url = `${OSRM_BASE_URL}/table/v1/driving/${coords}?annotations=duration`
 
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`OSRM table failed: ${res.status}`)
-
-  const data = await res.json()
-  if (data.code !== 'Ok') throw new Error(`OSRM table error: ${data.code}`)
+  const data = await osrmFetch(url, 'table')
+  if (data.code !== 'Ok') {
+    throw new Error(`OSRM table error: ${data.code} ${data.message ?? ''}`.trim())
+  }
 
   return data.durations
 }
@@ -30,14 +59,13 @@ export async function fetchDurationMatrix(
 export async function fetchRoute(
   points: { lat: number; lng: number }[]
 ): Promise<OSRMRouteResult> {
-  const coords = points.map(p => `${p.lng},${p.lat}`).join(';')
+  const coords = points.map((p) => `${p.lng},${p.lat}`).join(';')
   const url = `${OSRM_BASE_URL}/route/v1/driving/${coords}?overview=full&geometries=polyline`
 
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`OSRM route failed: ${res.status}`)
-
-  const data = await res.json()
-  if (data.code !== 'Ok') throw new Error(`OSRM route error: ${data.code}`)
+  const data = await osrmFetch(url, 'route')
+  if (data.code !== 'Ok') {
+    throw new Error(`OSRM route error: ${data.code} ${data.message ?? ''}`.trim())
+  }
 
   const route = data.routes[0]
   return {

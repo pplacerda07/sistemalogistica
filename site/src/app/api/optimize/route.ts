@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { optimizeRoute } from '@/lib/optimizer'
 import type { OptimizeRequest } from '@/lib/types'
 
+// Allow up to 30s on Vercel — OSRM público can take 5–10s on cold matrix calls.
+export const maxDuration = 30
+
 export async function POST(request: Request) {
   try {
     const body: OptimizeRequest = await request.json()
@@ -42,9 +45,10 @@ export async function POST(request: Request) {
       polyline: result.polyline,
     })
   } catch (error) {
-    console.error('Optimize error:', error)
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error('Optimize error:', msg, error)
     return NextResponse.json(
-      { error: 'Erro ao otimizar rota' },
+      { error: `Erro ao otimizar: ${msg}` },
       { status: 500 }
     )
   }
