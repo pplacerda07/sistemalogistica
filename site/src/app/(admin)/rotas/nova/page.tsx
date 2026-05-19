@@ -7,6 +7,13 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
@@ -181,30 +188,42 @@ export default function NovaRotaPage() {
     setOptimizing(true)
     try {
       const selectedClientes = clientes.filter((c) => selected.has(c.id))
+      const payload = {
+        origem: origemCoords,
+        clientes: selectedClientes.map((c) => ({
+          id: c.id,
+          lat: c.lat,
+          lng: c.lng,
+        })),
+      }
+      console.log('[optimize] sending', payload)
+
       const res = await fetch('/api/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origem: origemCoords,
-          clientes: selectedClientes.map((c) => ({
-            id: c.id,
-            lat: c.lat,
-            lng: c.lng,
-          })),
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Erro ao otimizar')
+        let errMsg = `HTTP ${res.status}`
+        try {
+          const err = await res.json()
+          errMsg = err.error || errMsg
+        } catch {
+          /* response not json */
+        }
+        console.error('[optimize] failed', res.status, errMsg)
+        throw new Error(errMsg)
       }
 
       const result = await res.json()
+      console.log('[optimize] result', result)
       setOptimizedResult(result)
-      toast.success('Rota otimizada com sucesso!')
+      toast.success('Rota otimizada!')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao otimizar'
-      toast.error(msg)
+      console.error('[optimize] exception', err)
+      toast.error(msg, { duration: 6000 })
     } finally {
       setOptimizing(false)
     }
@@ -297,20 +316,22 @@ export default function NovaRotaPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <select
+              <Select
                 value={vendedorId}
-                onChange={(e) => {
-                  setVendedorId(e.target.value)
+                onValueChange={(v) => {
+                  setVendedorId(v ?? '')
                   setOptimizedResult(null)
                 }}
-                required
-                className="w-full h-9 rounded-md bg-white/5 border border-white/10 text-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               >
-                <option value="">Selecione um vendedor...</option>
-                {vendedores.map((v) => (
-                  <option key={v.id} value={v.id}>{v.nome}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full bg-white/5 border-white/10 text-white">
+                  <SelectValue placeholder="Selecione um vendedor..." />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0d0d24] border-white/10 text-white">
+                  {vendedores.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {vendedores.length === 0 && !loading && (
                 <p className="text-xs text-amber-400 mt-2">
                   Nenhum vendedor cadastrado. Cadastre em /usuarios.
