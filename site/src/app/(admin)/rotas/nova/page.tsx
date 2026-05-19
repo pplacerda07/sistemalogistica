@@ -211,42 +211,26 @@ export default function NovaRotaPage() {
 
     setSaving(true)
     try {
-      // Create route
-      const { data: rota, error: rotaError } = await supabase
-        .from('rotas')
-        .insert({
-          vendedor_id: vendedorId,
-          data: new Date().toISOString().split('T')[0],
-          origem_texto: origem,
-          status: 'planejada',
-          distancia_total_m: optimizedResult.distanciaTotalMetros,
-          duracao_total_s: optimizedResult.duracaoTotalSegundos,
-          polyline: optimizedResult.polyline,
-        })
-        .select()
-        .single()
+      const { data: rotaId, error } = await supabase.rpc('create_rota_with_paradas', {
+        p_vendedor_id: vendedorId,
+        p_data: new Date().toISOString().split('T')[0],
+        p_origem_lng: origemCoords.lng,
+        p_origem_lat: origemCoords.lat,
+        p_origem_texto: origem,
+        p_distancia_m: optimizedResult.distanciaTotalMetros,
+        p_duracao_s: optimizedResult.duracaoTotalSegundos,
+        p_polyline: optimizedResult.polyline,
+        p_cliente_ids: optimizedResult.ordem,
+      })
 
-      if (rotaError) throw rotaError
-
-      // Create stops in order
-      const paradas = optimizedResult.ordem.map((clienteId, idx) => ({
-        rota_id: rota.id,
-        cliente_id: clienteId,
-        ordem: idx,
-        status: 'pendente' as const,
-      }))
-
-      const { error: paradasError } = await supabase
-        .from('paradas')
-        .insert(paradas)
-
-      if (paradasError) throw paradasError
+      if (error) throw error
 
       toast.success('Rota salva com sucesso!')
-      router.push(`/rotas/${rota.id}`)
+      router.push(`/rotas/${rotaId}`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao salvar'
-      toast.error(msg)
+      console.error('[save] error:', err)
+      toast.error(msg, { duration: 6000 })
     } finally {
       setSaving(false)
     }
@@ -448,24 +432,65 @@ export default function NovaRotaPage() {
 
           {/* Result info */}
           {optimizedResult && (
-            <Card className="bg-emerald-500/5 border-emerald-500/20">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-1.5 text-emerald-400">
-                    <Clock className="w-4 h-4" />
-                    {Math.floor(optimizedResult.duracaoTotalSegundos / 60)} min
+            <>
+              <Card className="bg-emerald-500/5 border-emerald-500/20">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-1.5 text-emerald-400">
+                      <Clock className="w-4 h-4" />
+                      {Math.floor(optimizedResult.duracaoTotalSegundos / 60)} min
+                    </div>
+                    <div className="flex items-center gap-1.5 text-emerald-400">
+                      <Navigation className="w-4 h-4" />
+                      {(optimizedResult.distanciaTotalMetros / 1000).toFixed(1)} km
+                    </div>
+                    <div className="flex items-center gap-1.5 text-emerald-400">
+                      <MapPin className="w-4 h-4" />
+                      {optimizedResult.ordem.length} paradas
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-emerald-400">
-                    <Navigation className="w-4 h-4" />
-                    {(optimizedResult.distanciaTotalMetros / 1000).toFixed(1)} km
+                </CardContent>
+              </Card>
+
+              {/* Ordem otimizada — visita nessa sequência */}
+              <Card className="bg-white/5 border-white/10">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-white text-base flex items-center gap-2">
+                    <Route className="w-4 h-4 text-indigo-400" />
+                    Ordem da visita
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex items-center gap-3 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                      <Navigation className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white font-semibold">Origem</p>
+                      <p className="text-xs text-gray-500 truncate">{origem}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-emerald-400">
-                    <MapPin className="w-4 h-4" />
-                    {optimizedResult.ordem.length} paradas
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  {orderedClientes.map((c, idx) => (
+                    <div
+                      key={c.id}
+                      className="flex items-center gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {idx + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white font-semibold truncate">
+                          {c.nome}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {c.endereco_texto}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </>
           )}
         </div>
 
