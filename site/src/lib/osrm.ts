@@ -36,14 +36,34 @@ async function osrmFetch(url: string, label: string) {
   }
 }
 
+function validatePoints(points: { lat: number; lng: number }[], label: string) {
+  points.forEach((p, i) => {
+    if (
+      typeof p.lat !== 'number' ||
+      typeof p.lng !== 'number' ||
+      !Number.isFinite(p.lat) ||
+      !Number.isFinite(p.lng) ||
+      Math.abs(p.lat) > 90 ||
+      Math.abs(p.lng) > 180
+    ) {
+      throw new Error(
+        `${label}: ponto ${i} com coordenada inválida (lat=${p.lat}, lng=${p.lng}). ` +
+          'Verifique se o cliente foi geocodificado corretamente.'
+      )
+    }
+  })
+}
+
 /**
  * Fetch NxN duration matrix from OSRM /table endpoint
  */
 export async function fetchDurationMatrix(
   points: { lat: number; lng: number }[]
 ): Promise<number[][]> {
+  validatePoints(points, 'fetchDurationMatrix')
   const coords = points.map((p) => `${p.lng},${p.lat}`).join(';')
   const url = `${OSRM_BASE_URL}/table/v1/driving/${coords}?annotations=duration`
+  console.log('[osrm] table url:', url)
 
   const data = await osrmFetch(url, 'table')
   if (data.code !== 'Ok') {
@@ -59,8 +79,10 @@ export async function fetchDurationMatrix(
 export async function fetchRoute(
   points: { lat: number; lng: number }[]
 ): Promise<OSRMRouteResult> {
+  validatePoints(points, 'fetchRoute')
   const coords = points.map((p) => `${p.lng},${p.lat}`).join(';')
   const url = `${OSRM_BASE_URL}/route/v1/driving/${coords}?overview=full&geometries=polyline`
+  console.log('[osrm] route url:', url)
 
   const data = await osrmFetch(url, 'route')
   if (data.code !== 'Ok') {
