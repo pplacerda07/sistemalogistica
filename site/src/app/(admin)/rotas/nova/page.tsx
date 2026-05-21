@@ -25,8 +25,10 @@ import {
   Navigation,
   Zap,
   User,
+  Pencil,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
+import EnderecoDialog from '@/components/forms/EnderecoDialog'
 
 const RouteMap = dynamic(() => import('@/components/map/RouteMap'), {
   ssr: false,
@@ -63,6 +65,7 @@ export default function NovaRotaPage() {
     lat: number
     lng: number
   } | null>(null)
+  const [origemDialogOpen, setOrigemDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [optimizing, setOptimizing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -127,25 +130,11 @@ export default function NovaRotaPage() {
     setOptimizedResult(null)
   }
 
-  async function geocodeOrigem() {
-    if (!origem.trim()) {
-      toast.error('Informe o endereço de origem')
-      return
-    }
-
-    const res = await fetch('/api/geocode', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ endereco: origem }),
-    })
-
-    if (res.ok) {
-      const data = await res.json()
-      setOrigemCoords({ lat: data.lat, lng: data.lng })
-      toast.success('Origem localizada!')
-    } else {
-      toast.error('Não foi possível localizar o endereço de origem')
-    }
+  function handleOrigemConfirm(result: { lat: number; lng: number; enderecoTexto: string }) {
+    setOrigem(result.enderecoTexto)
+    setOrigemCoords({ lat: result.lat, lng: result.lng })
+    setOptimizedResult(null)
+    toast.success('Origem localizada!')
   }
 
   async function handleOptimize() {
@@ -281,7 +270,11 @@ export default function NovaRotaPage() {
                 }}
               >
                 <SelectTrigger className="w-full bg-white/5 border-white/10 text-white">
-                  <SelectValue placeholder="Selecione um vendedor..." />
+                  <SelectValue placeholder="Selecione um vendedor...">
+                    {(value: string) =>
+                      vendedores.find((v) => v.id === value)?.nome ?? 'Selecione um vendedor...'
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-[#0d0d24] border-white/10 text-white">
                   {vendedores.map((v) => (
@@ -305,34 +298,49 @@ export default function NovaRotaPage() {
                 Ponto de partida
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Endereço de partida..."
-                  value={origem}
-                  onChange={(e) => {
-                    setOrigem(e.target.value)
-                    setOrigemCoords(null)
-                  }}
-                  className="bg-white/5 border-white/10 text-white placeholder:text-gray-500"
-                />
+            <CardContent>
+              {origemCoords ? (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-white font-medium truncate">
+                      {origem}
+                    </p>
+                    <p className="text-xs text-emerald-400 flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3" />
+                      {origemCoords.lat.toFixed(5)}, {origemCoords.lng.toFixed(5)}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setOrigemDialogOpen(true)}
+                    className="text-gray-400 hover:text-white hover:bg-white/5 shrink-0"
+                  >
+                    <Pencil className="w-3.5 h-3.5 mr-1" />
+                    Alterar
+                  </Button>
+                </div>
+              ) : (
                 <Button
-                  onClick={geocodeOrigem}
+                  type="button"
+                  onClick={() => setOrigemDialogOpen(true)}
                   variant="outline"
-                  className="border-white/10 text-gray-300 hover:bg-white/5 shrink-0"
+                  className="w-full border-white/10 text-gray-300 hover:bg-white/5"
                 >
-                  <MapPin className="w-4 h-4" />
+                  <MapPin className="w-4 h-4 mr-2" />
+                  Definir ponto de partida
                 </Button>
-              </div>
-              {origemCoords && (
-                <p className="text-xs text-emerald-400 flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  Localizado: {origemCoords.lat.toFixed(5)},{' '}
-                  {origemCoords.lng.toFixed(5)}
-                </p>
               )}
             </CardContent>
           </Card>
+
+          <EnderecoDialog
+            open={origemDialogOpen}
+            onOpenChange={setOrigemDialogOpen}
+            title="Definir ponto de partida"
+            onConfirm={handleOrigemConfirm}
+          />
 
           {/* Client selection */}
           <Card className="bg-white/5 border-white/10">
