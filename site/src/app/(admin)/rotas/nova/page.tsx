@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,24 +43,58 @@ interface VendedorPickerProps {
 
 function VendedorPicker({ value, onChange, options }: VendedorPickerProps) {
   const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const [mounted, setMounted] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!open) return
+
+    function updateRect() {
+      if (triggerRef.current) {
+        setRect(triggerRef.current.getBoundingClientRect())
+      }
+    }
+    updateRect()
+
     function onDocClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (
+        !triggerRef.current?.contains(target) &&
+        !popupRef.current?.contains(target)
+      ) {
         setOpen(false)
       }
     }
+
+    function onEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+
     document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onEscape)
+    window.addEventListener('scroll', updateRect, true)
+    window.addEventListener('resize', updateRect)
+
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onEscape)
+      window.removeEventListener('scroll', updateRect, true)
+      window.removeEventListener('resize', updateRect)
+    }
   }, [open])
 
   const selected = options.find((o) => o.id === value)
 
   return (
-    <div ref={containerRef} className="relative">
+    <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full h-10 px-3 flex items-center justify-between gap-2 rounded-md bg-white/5 border border-white/10 text-white text-sm hover:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-colors"
@@ -74,38 +109,50 @@ function VendedorPicker({ value, onChange, options }: VendedorPickerProps) {
         />
       </button>
 
-      {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 max-h-64 overflow-y-auto rounded-md bg-[#0d0d24] border border-white/10 shadow-xl shadow-black/50 z-50">
-          {options.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-gray-500">
-              Nenhum vendedor cadastrado
-            </div>
-          ) : (
-            options.map((opt) => {
-              const isSelected = opt.id === value
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                    onChange(opt.id)
-                    setOpen(false)
-                  }}
-                  className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 transition-colors ${
-                    isSelected
-                      ? 'bg-blue-500/15 text-blue-300'
-                      : 'text-white hover:bg-white/5'
-                  }`}
-                >
-                  <span className="truncate">{opt.nome}</span>
-                  {isSelected && <Check className="w-4 h-4 shrink-0" />}
-                </button>
-              )
-            })
-          )}
-        </div>
-      )}
-    </div>
+      {mounted && open && rect &&
+        createPortal(
+          <div
+            ref={popupRef}
+            style={{
+              position: 'fixed',
+              top: rect.bottom + 4,
+              left: rect.left,
+              width: rect.width,
+              zIndex: 9999,
+            }}
+            className="max-h-64 overflow-y-auto rounded-md bg-[#0d0d24] border border-white/10 shadow-xl shadow-black/50"
+          >
+            {options.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-gray-500">
+                Nenhum vendedor cadastrado
+              </div>
+            ) : (
+              options.map((opt) => {
+                const isSelected = opt.id === value
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      onChange(opt.id)
+                      setOpen(false)
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 transition-colors ${
+                      isSelected
+                        ? 'bg-blue-500/15 text-blue-300'
+                        : 'text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="truncate">{opt.nome}</span>
+                    {isSelected && <Check className="w-4 h-4 shrink-0" />}
+                  </button>
+                )
+              })
+            )}
+          </div>,
+          document.body
+        )}
+    </>
   )
 }
 
