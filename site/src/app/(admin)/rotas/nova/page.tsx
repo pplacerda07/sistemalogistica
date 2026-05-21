@@ -1,19 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
@@ -26,6 +19,8 @@ import {
   Zap,
   User,
   Pencil,
+  ChevronDown,
+  Check,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import EnderecoDialog from '@/components/forms/EnderecoDialog'
@@ -38,6 +33,81 @@ const RouteMap = dynamic(() => import('@/components/map/RouteMap'), {
     </div>
   ),
 })
+
+interface VendedorPickerProps {
+  value: string
+  onChange: (id: string) => void
+  options: { id: string; nome: string }[]
+}
+
+function VendedorPicker({ value, onChange, options }: VendedorPickerProps) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  const selected = options.find((o) => o.id === value)
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full h-10 px-3 flex items-center justify-between gap-2 rounded-md bg-white/5 border border-white/10 text-white text-sm hover:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-colors"
+      >
+        <span className={selected ? 'text-white truncate' : 'text-gray-500'}>
+          {selected ? selected.nome : 'Selecione um vendedor...'}
+        </span>
+        <ChevronDown
+          className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 max-h-64 overflow-y-auto rounded-md bg-[#0d0d24] border border-white/10 shadow-xl shadow-black/50 z-50">
+          {options.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-500">
+              Nenhum vendedor cadastrado
+            </div>
+          ) : (
+            options.map((opt) => {
+              const isSelected = opt.id === value
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.id)
+                    setOpen(false)
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 transition-colors ${
+                    isSelected
+                      ? 'bg-blue-500/15 text-blue-300'
+                      : 'text-white hover:bg-white/5'
+                  }`}
+                >
+                  <span className="truncate">{opt.nome}</span>
+                  {isSelected && <Check className="w-4 h-4 shrink-0" />}
+                </button>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface ParsedCliente {
   id: string
@@ -262,26 +332,14 @@ export default function NovaRotaPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Select
+              <VendedorPicker
                 value={vendedorId}
-                onValueChange={(v) => {
-                  setVendedorId(v ?? '')
+                onChange={(v) => {
+                  setVendedorId(v)
                   setOptimizedResult(null)
                 }}
-              >
-                <SelectTrigger className="w-full bg-white/5 border-white/10 text-white">
-                  <SelectValue placeholder="Selecione um vendedor...">
-                    {(value: string) =>
-                      vendedores.find((v) => v.id === value)?.nome ?? 'Selecione um vendedor...'
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-[#0d0d24] border-white/10 text-white">
-                  {vendedores.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={vendedores}
+              />
               {vendedores.length === 0 && !loading && (
                 <p className="text-xs text-amber-400 mt-2">
                   Nenhum vendedor cadastrado. Cadastre em /usuarios.
